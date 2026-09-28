@@ -45,9 +45,21 @@ python main.py web                     # 启动 Web 界面（http://127.0.0.1:80
 ├── index.html             # Web 前端入口（无构建，可直接预览）
 ├── css/  js/              # 前端样式与脚本
 ├── tests/                 # pytest 单元测试
-├── docs/                  # 开发文档 / 测试文档
+├── docs/                  # 开发文档 / 测试文档 / 演示视频脚本 / 提交指南
 └── Design.md              # 设计文档
 ```
+
+## 快速演示
+
+```powershell
+# 用内置的「问题代码」体验完整审查链路（预埋 6 类典型缺陷）
+python main.py review examples/app_demo.py
+
+# 或启动 Web 界面（设置面板可切换 DeepSeek / 小米 MiMo 等服务商）
+python main.py web
+```
+
+输出：实时工具时间线 + 分级审查报告（严重/警告/建议，含行号与修复建议）。
 
 ## 配置说明
 
@@ -58,7 +70,7 @@ python main.py web                     # 启动 Web 界面（http://127.0.0.1:80
 | `provider` | `deepseek` / `mimo` / `openai-compatible` | `deepseek` |
 | `base_url` | 端点，留空用预设 | 按预设 |
 | `api_key` | 密钥，推荐用 `CRA_API_KEY` 环境变量 | 空 |
-| `model` | 模型名，留空用预设 | 按预设 |
+| `model` | 模型名，留空用预设（MiMo 预设 `mimo-v2.6-pro`） | 按预设 |
 | `max_iterations` | Agent 循环上限 | 8 |
 | `auto_fix_enabled` | 是否允许自动修复（仍需逐次确认） | true |
 

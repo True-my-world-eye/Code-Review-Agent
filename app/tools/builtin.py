@@ -145,6 +145,8 @@ def _read_file(args: dict[str, Any], ctx: ToolContext) -> str:
     content = _read_text(target)
     all_lines = content.splitlines()
     total = len(all_lines)
+    if total == 0:
+        return f"（文件 {rel_display(ctx, target)} 为空，0 行）"
 
     start = args.get("start")
     end = args.get("end")
@@ -157,6 +159,9 @@ def _read_file(args: dict[str, Any], ctx: ToolContext) -> str:
         raise ToolError("行号从 1 开始")
     if end_i < start_i:
         raise ToolError("end 不能小于 start")
+    if start_i > total:
+        # 模型可能幻觉出行号越界：明确报错让它回到文件实际范围
+        raise ToolError(f"start 超出文件范围（该文件共 {total} 行）")
     # 未给区间且文件超长：强制只读前 READ_MAX_LINES 行，引导分段读取
     if start is None and end is None and total > READ_MAX_LINES:
         end_i = READ_MAX_LINES

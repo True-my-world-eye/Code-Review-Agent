@@ -179,10 +179,10 @@ class LLMClient:
 | provider 预设 | base_url 默认值 | model 默认值 |
 |---------------|-----------------|--------------|
 | `deepseek` | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| `mimo` | `https://api.xiaomimimo.com/v1`* | `mimo-v2-flash`* |
+| `mimo` | `https://api.xiaomimimo.com/v1` | `mimo-v2.6-pro` |
 | `openai-compatible` | 手填 | 手填 |
 
-\* MiMo 的实际端点与模型名以官方文档为准，实现时校准，并允许手工修改——预设只是省事的默认值，不是限制。
+\* MiMo 预设已于 2026-09-28 按官方文档与 `/v1/models` 实测校准；预设只是省事的默认值，任何字段都可手工覆盖（如改用 `mimo-v2.6-flash` 降低额度消耗）。
 
 ### 6.3 配置优先级与数据流
 

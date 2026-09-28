@@ -51,5 +51,21 @@ def config_show() -> None:
         typer.echo(f"{key}: {value}")
 
 
+@config_app.command("test")
+def config_test() -> None:
+    """测试 LLM 连通性（验证服务商 / api_key / model 是否可用）。"""
+    from app.config import load_settings
+    from app.llm.client import LLMClient
+
+    settings = load_settings()
+    typer.echo(f"正在测试 {settings.provider} ({settings.effective_base_url}) ...")
+    ok, message = LLMClient(settings).test_connection()
+    if ok:
+        typer.secho(f"✓ {message}", fg=typer.colors.GREEN)
+    else:
+        typer.secho(f"✗ {message}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()

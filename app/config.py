@@ -36,9 +36,9 @@ PRESETS: dict[str, dict[str, str]] = {
     },
     "mimo": {
         "label": "小米 MiMo",
-        # 端点以小米官方文档为准；若与实际不符，可在配置中手工修改
+        # 端点与模型名已按官方文档校准（2026-09-28 查询 /v1/models 验证）
         "base_url": "https://api.xiaomimimo.com/v1",
-        "model": "mimo-v2-flash",
+        "model": "mimo-v2.6-pro",
     },
     "openai-compatible": {
         "label": "自定义（OpenAI 兼容）",

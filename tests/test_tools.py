@@ -170,6 +170,38 @@ def test_read_file_bad_range(registry: ToolRegistry) -> None:
     assert result.startswith("Error:") and "end" in result
 
 
+# ================================================================ 边界用例（M7）
+def test_read_empty_file(registry: ToolRegistry, root: Path) -> None:
+    """空文件：返回清晰回执，不产生错乱行号区间。"""
+    (root / "empty.py").write_text("", encoding="utf-8")
+    result = registry.execute("read_file", {"path": "empty.py"})
+    assert "为空" in result and not result.startswith("Error:")
+
+
+def test_read_start_beyond_total(registry: ToolRegistry, root: Path) -> None:
+    """start 超出文件行数 → 明确报错（模型幻觉行号时可自纠）。"""
+    (root / "small.py").write_text("a = 1\n", encoding="utf-8")
+    result = registry.execute("read_file", {"path": "small.py", "start": 99})
+    assert result.startswith("Error:") and "超出文件范围" in result
+
+
+def test_read_chinese_filename(registry: ToolRegistry, root: Path) -> None:
+    """中文文件名与中文内容正常读取。"""
+    (root / "测试文件.py").write_text("# 中文注释\n变量 = 1\n", encoding="utf-8")
+    result = registry.execute("read_file", {"path": "测试文件.py"})
+    assert "中文注释" in result and "变量 = 1" in result
+
+
+def test_read_5000_line_file(registry: ToolRegistry, root: Path) -> None:
+    """5000 行大文件：默认只读前 400 行并正确引导分段。"""
+    (root / "big.py").write_text(
+        "\n".join(f"line_{i} = {i}" for i in range(1, 5001)), encoding="utf-8"
+    )
+    result = registry.execute("read_file", {"path": "big.py"})
+    assert "共 5000 行" in result and "start=401" in result
+    assert "line_5000" not in result
+
+
 # ================================================================ search_code
 def test_search_hit(registry: ToolRegistry) -> None:
     """命中格式为 路径:行号: 内容。"""

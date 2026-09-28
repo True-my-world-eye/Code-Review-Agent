@@ -2,8 +2,7 @@
 
 基于 LLM 的代码审查 Agent：输入一个文件或目录，Agent 自主完成「读取代码 → 调用工具分析 → 生成审查报告 →（可选）应用修复」的完整闭环，提供 **CLI** 与 **Web** 双界面，支持 DeepSeek / 小米 MiMo 等任意 OpenAI 兼容服务商一键切换。
 
-> 软件工程与项目实践 · Homework 1 · Code Agent
-> 设计文档见 [Design.md](Design.md)，开发进度见 [docs/开发文档.md](docs/开发文档.md)，测试记录见 [docs/测试文档.md](docs/测试文档.md)。
+> 设计文档见 [Design.md](Design.md) · 开发进度见 [docs/开发文档.md](docs/开发文档.md) · 测试记录见 [docs/测试文档.md](docs/测试文档.md)
 
 ## 功能特性
 
@@ -44,8 +43,8 @@ python main.py web                     # 启动 Web 界面（http://127.0.0.1:80
 │   └── web/               # Web API（FastAPI）
 ├── index.html             # Web 前端入口（无构建，可直接预览）
 ├── css/  js/              # 前端样式与脚本
-├── tests/                 # pytest 单元测试
-├── docs/                  # 开发文档 / 测试文档 / 演示视频脚本 / 提交指南
+├── tests/                 # pytest 单元测试（120 个用例）
+├── docs/                  # 开发文档 / 测试文档
 └── Design.md              # 设计文档
 ```
 

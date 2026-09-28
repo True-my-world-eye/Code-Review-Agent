@@ -272,6 +272,16 @@ def _apply_fix(args: dict[str, Any], ctx: ToolContext) -> str:
     if not target.exists() or target.is_dir():
         raise ToolError(f"文件不存在：{raw_path}")
     content = _read_text(target)
+    # 换行风格对齐：文件是 CRLF 而模型给的代码是 LF 时，替换前统一为 CRLF，
+    # 否则 Windows 文件会因匹配不到原文而修复失败
+    crlf_file = "\r\n" in content
+    crlf_old = "\r\n" in old_code
+    if crlf_file and not crlf_old:
+        old_code = old_code.replace("\n", "\r\n")
+        new_code = new_code.replace("\n", "\r\n")
+    elif not crlf_file and crlf_old:
+        old_code = old_code.replace("\r\n", "\n")
+        new_code = new_code.replace("\r\n", "\n")
     occurrences = content.count(old_code)
     if occurrences == 0:
         raise ToolError("old_code 在目标文件中未找到，请核对代码是否逐字符一致")
@@ -291,7 +301,10 @@ def _apply_fix(args: dict[str, Any], ctx: ToolContext) -> str:
     backup = target.parent / (target.name + ".bak")
     try:
         backup.write_bytes(target.read_bytes())
-        target.write_text(content.replace(old_code, new_code, 1), encoding="utf-8")
+        new_content = content.replace(old_code, new_code, 1)
+        # 用 bytes 写入：避免 Windows 文本模式把已有 CRLF 再翻译一遍变成 \r\r\n；
+        # 非 UTF-8 源文件修复后统一存为 UTF-8（内容已按原编码正确解码）
+        target.write_bytes(new_content.encode("utf-8"))
     except OSError as exc:
         raise ToolError(f"写入文件失败：{exc}") from exc
     return (

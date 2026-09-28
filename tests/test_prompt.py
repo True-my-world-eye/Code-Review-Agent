@@ -97,3 +97,40 @@ def test_issues_not_a_list_degrades() -> None:
     content = json.dumps({"summary": "s", "issues": "不是数组"})
     report = parse_review_report(content)
     assert report["issues"] == [] and report["summary"] == "s"
+
+
+def test_fix_field_normalized() -> None:
+    """合法 fix 字段保留；结构不合法的 fix 丢弃，不影响 issue 本身。"""
+    content = json.dumps(
+        {
+            "summary": "s",
+            "issues": [
+                {
+                    "severity": "error",
+                    "file": "a.py",
+                    "line": 1,
+                    "message": "问题A",
+                    "fix": {"old_code": "x = 1", "new_code": "x = 2"},
+                },
+                {
+                    "severity": "warning",
+                    "file": "b.py",
+                    "line": 2,
+                    "message": "问题B",
+                    "fix": {"old_code": "", "new_code": "y"},  # 空 old_code 非法
+                },
+                {
+                    "severity": "suggestion",
+                    "file": "c.py",
+                    "line": 3,
+                    "message": "问题C",
+                    "fix": "不是字典",  # 类型非法
+                },
+            ],
+        }
+    )
+    report = parse_review_report(content)
+    assert report["issues"][0]["fix"] == {"old_code": "x = 1", "new_code": "x = 2"}
+    assert report["issues"][1]["fix"] is None
+    assert report["issues"][2]["fix"] is None
+    assert report["parsed"] is True

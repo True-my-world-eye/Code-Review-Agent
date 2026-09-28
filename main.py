@@ -7,6 +7,7 @@
     python main.py config show            # 查看当前配置（Key 脱敏）
     python main.py config set ...         # 修改配置
     python main.py config test            # 测试 LLM 连通性
+    python main.py web                    # 启动 Web 界面（http://127.0.0.1:8000）
 
 命令实现位于 app/cli/app.py，本文件仅作为可执行入口。
 """

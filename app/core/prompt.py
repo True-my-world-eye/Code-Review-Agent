@@ -38,6 +38,9 @@ _SYSTEM_TEMPLATE = """你是一名资深代码审查 Agent，运行在用户的�
 - severity 取值：error（必须修复的缺陷/漏洞）/ warning（大概率有问题）/ suggestion（改进建议）
 - line 为从 1 开始的行号；不确定时给出最接近的行并在 message 中说明
 - 只报告你实际读过的代码中的问题；没有问题就返回空 issues 数组
+- 若能给出修复代码，为该 issue 附加可选的 fix 字段：
+  "fix": {{"old_code": "与原文件逐字符一致且唯一的原文", "new_code": "修复后的代码"}}
+  old_code 必须来自你实际 read_file 读到的内容；不确定就省略 fix，只写 suggestion
 
 ## 其他规则
 - 工具返回 "Error: ..." 时，先阅读原因再调整策略，不要重复相同的失败调用
@@ -86,13 +89,28 @@ def _normalize_issue(raw: Any) -> dict[str, Any] | None:
     message = str(raw.get("message", "")).strip()
     if not message:
         return None  # 没有任何描述的问题没有价值，丢弃
-    return {
+    normalized: dict[str, Any] = {
         "severity": severity,
         "file": str(raw.get("file", "")).strip(),
         "line": max(line, 0),
         "message": message,
         "suggestion": str(raw.get("suggestion", "")).strip(),
+        "fix": None,
     }
+    # 可选 fix 字段：结构合法才保留（供界面层「应用修复」按钮使用）
+    fix = raw.get("fix")
+    if isinstance(fix, dict):
+        old_code = fix.get("old_code")
+        new_code = fix.get("new_code")
+        if (
+            isinstance(old_code, str)
+            and isinstance(new_code, str)
+            and old_code
+            and new_code
+            and old_code != new_code
+        ):
+            normalized["fix"] = {"old_code": old_code, "new_code": new_code}
+    return normalized
 
 
 def parse_review_report(content: str) -> dict[str, Any]:

@@ -289,6 +289,26 @@ def chat(
                   f"可用 --session 恢复。[/dim]")
 
 
+# ================================================================ web
+@app.command("web")
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="监听地址"),
+    port: int = typer.Option(8000, "--port", help="监听端口"),
+) -> None:
+    """启动 Web 界面（浏览器访问 http://127.0.0.1:8000）。"""
+    import uvicorn
+
+    console.print(
+        Panel(
+            f"[bold]Code Review Agent · Web[/bold]\n"
+            f"地址：http://{host}:{port}\n"
+            f"按 Ctrl+C 停止服务",
+            border_style="blue",
+        )
+    )
+    uvicorn.run("app.web.server:app", host=host, port=port, log_level="warning")
+
+
 # ================================================================ config
 @config_app.command("show")
 def config_show() -> None:

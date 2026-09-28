@@ -1,0 +1,22 @@
+# ===== 实际配置与密钥（不入库，仅提交 config.example.yaml）=====
+config.yaml
+.env
+
+# ===== Python =====
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# ===== 运行时产物 =====
+sessions/
+*.bak
+qa/
+dist/
+build/
+
+# ===== 课程原件与提交打包物 =====
+Homework 1.pptx
+*.rar

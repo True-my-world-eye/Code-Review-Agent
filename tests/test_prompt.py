@@ -70,7 +70,7 @@ def test_parse_invalid_json_degrades_to_raw() -> None:
 
 def test_parse_empty_content() -> None:
     report = parse_review_report("")
-    assert report == {"summary": "", "issues": [], "raw": ""}
+    assert report == {"summary": "", "issues": [], "raw": "", "parsed": False}
 
 
 def test_issue_normalization() -> None:

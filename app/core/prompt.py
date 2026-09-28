@@ -99,8 +99,9 @@ def parse_review_report(content: str) -> dict[str, Any]:
     """解析模型输出为结构化报告，永不抛异常。
 
     Returns:
-        {"summary": str, "issues": [...], "raw": 原文}
-        解析失败时 issues 为空、raw 保留全文，由界面层降级展示。
+        {"summary": str, "issues": [...], "raw": 原文, "parsed": bool}
+        parsed=True 表示成功提取出 JSON 对象；False 时 issues 为空、
+        raw 保留全文，由界面层降级展示原文。
     """
     text = content or ""
     candidate = _extract_json_str(text)
@@ -123,5 +124,6 @@ def parse_review_report(content: str) -> dict[str, Any]:
             "summary": str(data.get("summary", "")).strip(),
             "issues": issues,
             "raw": text,
+            "parsed": True,
         }
-    return {"summary": "", "issues": [], "raw": text}
+    return {"summary": "", "issues": [], "raw": text, "parsed": False}

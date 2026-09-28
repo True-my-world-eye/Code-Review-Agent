@@ -36,8 +36,13 @@
         </div>
 
         <div id="panePath" class="pane">
+          <div class="row">
+            <button id="btnPickDir" class="btn" type="button">📁 选择目录</button>
+            <input id="rootDisplay" class="input grow" type="text" readonly
+                   value="（项目根目录）" title="当前审查根目录，点左侧按钮可切换到任意本地目录">
+          </div>
           <input id="inputPath" class="input" type="text"
-                 value="." placeholder="相对项目的路径，如 src、app.py（. 表示整个项目）">
+                 value="." placeholder="子路径（相对所选目录，默认 . 即目录本身）">
         </div>
 
         <div id="paneCode" class="pane hidden">
@@ -130,6 +135,21 @@
         <button id="btnSaveSettings" class="btn btn-primary" type="button">保存</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ================= 目录选择器 ================= -->
+  <dialog id="dirDialog" class="dialog">
+    <div class="dialog-title">选择审查目录</div>
+    <div class="dir-hint">代码不必在本项目下 —— 点盘符进入，单击子目录下钻，选好后确认</div>
+    <input id="dirCrumb" class="input" type="text" readonly value="（选择一个盘符开始）">
+    <div id="dirDrives" class="dir-drives"></div>
+    <ul id="dirList" class="dir-list"></ul>
+    <div class="dialog-actions">
+      <button id="btnDirUp" class="btn btn-ghost" type="button" disabled>⬆ 上级</button>
+      <span class="spacer"></span>
+      <button id="btnDirCancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btnDirPick" class="btn btn-primary" type="button">选择此目录</button>
+    </div>
   </dialog>
 
   <!-- 轻提示 -->

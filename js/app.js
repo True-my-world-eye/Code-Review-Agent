@@ -44,11 +44,15 @@ function escapeHtml(text) {
 /* ---------------- 全局状态 ---------------- */
 const state = {
   mode: "path",        // path | code
+  root: null,          // 审查根（null = 项目根目录；否则为选定的绝对路径）
   taskId: null,        // 当前轮询的任务
   pollTimer: null,     // 轮询定时器
   history: [],         // 本次运行内的审查历史
   providers: [],       // 服务商列表
 };
+
+/* ---------------- 目录选择器状态 ---------------- */
+const dirState = { current: "", parent: null };
 
 /* ============================================================
  * 配置：读取 / 保存 / 连通性自检
@@ -162,6 +166,7 @@ async function startReview() {
   const body = { ask: $("inputAsk").value.trim() || null };
   if (state.mode === "path") {
     body.path = $("inputPath").value.trim() || ".";
+    if (state.root) body.root = state.root;   // 选定的任意本地目录
   } else {
     body.code = $("inputCode").value;
     body.file_name = $("inputFileName").value.trim() || "snippet.py";
@@ -326,6 +331,7 @@ async function applyFix(idx) {
         path: relPath,
         old_code: issue.fix.old_code,
         new_code: issue.fix.new_code,
+        task_id: state.taskId,   // 服务端据此定位项目外的审查根
       }),
     });
     if (data.ok) {
@@ -344,6 +350,62 @@ async function applyFix(idx) {
   } catch (err) {
     toast(err.message, true);
   }
+}
+
+/* ============================================================
+ * 目录选择器（支持任意本地目录，不限于项目内）
+ * ============================================================ */
+
+/** 设定/清除审查根：null 表示回到项目根目录 */
+function setPickedRoot(path) {
+  state.root = path || null;
+  $("rootDisplay").value = path || "（项目根目录）";
+}
+
+/** 导航到指定目录并渲染盘符与子目录列表 */
+async function navigateDir(path) {
+  try {
+    const data = await api(`/api/fs/list?path=${encodeURIComponent(path || "")}`);
+    dirState.current = data.path;
+    dirState.parent = data.parent;
+    $("dirCrumb").value = data.path || "（选择一个盘符开始）";
+    $("btnDirUp").disabled = !data.parent;
+
+    // 盘符快捷跳转
+    $("dirDrives").innerHTML = (data.drives || [])
+      .map(
+        (d) =>
+          `<button type="button" class="tab dir-drive" data-drive="${escapeHtml(d)}">${escapeHtml(d)}</button>`
+      )
+      .join("");
+    $("dirDrives").querySelectorAll("[data-drive]").forEach((btn) => {
+      btn.addEventListener("click", () => navigateDir(btn.dataset.drive));
+    });
+
+    // 子目录：单击下钻
+    const list = $("dirList");
+    if (!data.dirs.length) {
+      list.innerHTML = `<li class="history-empty">（无子目录）</li>`;
+    } else {
+      list.innerHTML = data.dirs
+        .map((d) => `<li data-name="${escapeHtml(d)}">📁 ${escapeHtml(d)}</li>`)
+        .join("");
+      list.querySelectorAll("li[data-name]").forEach((li) => {
+        li.addEventListener("click", () => {
+          const base = dirState.current.replace(/[\\/]+$/, "");
+          const sep = base.includes("\\") ? "\\" : "/";
+          navigateDir(`${base}${sep}${li.dataset.name}`);
+        });
+      });
+    }
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function openDirPicker() {
+  $("dirDialog").showModal();
+  navigateDir(dirState.current || "");
 }
 
 /* ============================================================
@@ -414,6 +476,10 @@ function resetAll() {
   $("timelineCard").classList.add("hidden");
   $("timeline").innerHTML = "";
   $("inputAsk").value = "";
+  $("inputPath").value = ".";
+  setPickedRoot(null);          // 审查根回到项目目录
+  dirState.current = "";
+  dirState.parent = null;
   renderHistory();
 }
 
@@ -425,6 +491,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // 审查
   $("btnReview").addEventListener("click", startReview);
   $("btnNew").addEventListener("click", resetAll);
+  // 目录选择器
+  $("btnPickDir").addEventListener("click", openDirPicker);
+  $("btnDirUp").addEventListener("click", () => navigateDir(dirState.parent || ""));
+  $("btnDirCancel").addEventListener("click", () => $("dirDialog").close());
+  $("btnDirPick").addEventListener("click", () => {
+    if (!dirState.current) {
+      toast("请先进入一个目录", true);
+      return;
+    }
+    setPickedRoot(dirState.current);
+    $("dirDialog").close();
+    toast(`审查根已设为 ${dirState.current}`);
+  });
   // 设置
   $("btnSettings").addEventListener("click", () => {
     settingsMsg("");

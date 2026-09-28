@@ -16,6 +16,8 @@ API 一览（对应 Design.md 第 9.1 节）：
 
 from __future__ import annotations
 
+import os
+import string
 import threading
 import time
 import uuid
@@ -48,7 +50,8 @@ class ReviewTask:
 
     task_id: str
     target: str  # 展示用目标（相对路径或 文件名）
-    root_rel: str = "."  # 审查根相对项目根的路径（修复接口拼接用）
+    root_rel: str = "."  # 审查根相对所选基准目录的路径（展示用）
+    root_abs: Path = ROOT  # 审查根的绝对路径（修复接口据此定位）
     status: str = "running"  # running | done | error
     events: list[dict[str, Any]] = field(default_factory=list)
     content: str | None = None  # 最终原文
@@ -92,17 +95,27 @@ def _event_to_dict(event: AgentEvent) -> dict[str, Any]:
     return {"kind": event.kind, "text": event.text, "ts": event.ts, "data": event.data}
 
 
-def _resolve_target(path_str: str) -> tuple[Path, str]:
-    """把 Web 传入的相对路径解析为 (审查根目录, 相对目标)。
+def _list_drives() -> list[str]:
+    """列出可用的磁盘根（Windows 盘符 / 其他系统的 /），供目录选择器起步。"""
+    if os.name == "nt":
+        return [f"{d}:\\" for d in string.ascii_uppercase if Path(f"{d}:\\").exists()]
+    return ["/"]
+
+
+def _resolve_target(base: Path, path_str: str) -> tuple[Path, str]:
+    """把相对路径解析为 (审查根目录, 相对目标)，目标必须位于 base 之内。
 
     Raises:
-        HTTPException 400：路径不存在或越出项目根目录。
+        HTTPException 400：路径不存在或越出所选根目录。
     """
-    candidate = (ROOT / path_str).resolve() if not Path(path_str).is_absolute() else Path(path_str).resolve()
+    raw = Path(path_str)
+    candidate = raw.resolve() if raw.is_absolute() else (base / raw).resolve()
     try:
-        candidate.relative_to(ROOT.resolve())
+        candidate.relative_to(base.resolve())
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="路径越界：只允许审查项目目录内的路径") from exc
+        raise HTTPException(
+            status_code=400, detail="路径越界：目标不在所选根目录内"
+        ) from exc
     if not candidate.exists():
         raise HTTPException(status_code=400, detail=f"路径不存在：{path_str}")
     if candidate.is_dir():
@@ -214,6 +227,33 @@ def test_config() -> dict[str, Any]:
     return {"ok": ok, "message": message}
 
 
+# ================================================================ 目录浏览
+@app.get("/api/fs/list")
+def fs_list(path: str = "") -> dict[str, Any]:
+    """目录浏览：供前端「选择目录」弹窗导航。
+
+    path 为空 → 返回盘符列表（导航起点）；否则返回该目录的子目录。
+    服务仅监听 127.0.0.1（本地单用户工具），范围为当前用户可读目录。
+    """
+    drives = _list_drives()
+    if not path:
+        return {"path": "", "parent": None, "drives": drives, "dirs": []}
+    target = Path(path).expanduser()
+    if not target.exists():
+        raise HTTPException(status_code=400, detail=f"路径不存在：{path}")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail=f"不是目录：{path}")
+    try:
+        dirs = sorted(
+            (e.name for e in target.iterdir() if e.is_dir()),
+            key=str.lower,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"无权限读取：{path}") from None
+    parent = str(target.parent) if target.parent != target else None
+    return {"path": str(target), "parent": parent, "drives": drives, "dirs": dirs}
+
+
 # ================================================================ 审查任务
 @app.post("/api/review")
 def start_review(body: ReviewRequest) -> dict[str, str]:
@@ -227,6 +267,17 @@ def start_review(body: ReviewRequest) -> dict[str, str]:
 
     task_id = uuid.uuid4().hex[:12]
 
+    # 审查根：默认项目目录；前端「选择目录」可指定任意本地目录
+    # （代码不必位于本项目之下，这正是目录选择器存在的意义）
+    if body.root:
+        base = Path(body.root).expanduser().resolve()
+        if not base.is_dir():
+            raise HTTPException(
+                status_code=400, detail=f"根目录不存在或不是目录：{body.root}"
+            )
+    else:
+        base = ROOT.resolve()
+
     # 粘贴模式：代码落盘到 sessions/paste/<task_id>/ 后按普通文件审查
     if body.code is not None and body.code.strip():
         file_name = (body.file_name or "snippet.py").strip()
@@ -238,14 +289,14 @@ def start_review(body: ReviewRequest) -> dict[str, str]:
         root, rel = paste_root, file_name
         target_display = f"粘贴代码 → {file_name}"
     else:
-        root, rel = _resolve_target(body.path)
-        target_display = body.path
+        root, rel = _resolve_target(base, body.path)
+        target_display = str(root) if rel == "." else str(root / rel)
 
     task = ReviewTask(task_id=task_id, target=target_display)
-    # 记录审查根相对项目根的路径：报告中的 file 是相对它的，
-    # 前端调用 /api/fix 时需拼回项目根相对路径
+    task.root_abs = root
+    # root_rel：审查根相对基准目录的展示路径（前端展示 / 修复定位兜底）
     try:
-        task.root_rel = root.resolve().relative_to(ROOT.resolve()).as_posix()
+        task.root_rel = root.resolve().relative_to(base).as_posix()
     except ValueError:
         task.root_rel = "."
     with _TASKS_LOCK:
@@ -273,13 +324,25 @@ def review_timeline(task_id: str) -> dict[str, Any]:
 # ================================================================ 应用修复
 @app.post("/api/fix")
 def apply_fix(body: FixRequest) -> dict[str, Any]:
-    """执行报告卡片上的修复（点击按钮即视为用户确认）。"""
+    """执行报告卡片上的修复（点击按钮即视为用户确认）。
+
+    优先用 task_id 定位该次审查的根目录（支持项目外的任意目录），
+    无 task_id 时回退到项目根目录。
+    """
     settings = load_settings()
     if not settings.auto_fix_enabled:
         raise HTTPException(status_code=400, detail="自动修复已在配置中禁用")
 
+    root = ROOT
+    if body.task_id:
+        with _TASKS_LOCK:
+            task = REVIEW_TASKS.get(body.task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="任务不存在或已过期")
+        root = task.root_abs
+
     # 「用户点击了按钮」就是确认回调
-    ctx = ToolContext(root=ROOT, tool_timeout=settings.tool_timeout,
+    ctx = ToolContext(root=root, tool_timeout=settings.tool_timeout,
                       auto_fix_enabled=True, confirm_fn=lambda p, d: True)
     registry = build_default_registry(ctx)
     message = registry.execute(

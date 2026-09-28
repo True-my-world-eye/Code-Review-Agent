@@ -7,11 +7,12 @@
 ## 功能特性
 
 - 🔄 **ReAct Agent 循环**：推理 → 工具调用 → 结果回填，执行过程全程时间线可见
+- 📁 **任意目录审查**：代码不必在本项目下——CLI 支持绝对路径 / `chat -r` / `/cd` 切换，Web 内置目录选择器（盘符逐级下钻）
 - 🛠 **5 个内置工具**：目录列举、分段读文件、正则搜索、ruff 真实 lint、安全自动修复
 - ⚙️ **可视化服务商设置**：Web 设置面板 / CLI 命令切换服务商与 API Key，带连通性自检
 - 💬 **上下文记忆**：会话内多轮追问，历史自动截断
-- 🖥 **双界面**：rich 美化的 CLI + 简约风 Web UI（同一内核，行为一致）
-- 🛡 **安全默认**：自动修复需逐次确认并自动备份、路径穿越防护、Key 脱敏且不入库
+- 🖥 **双界面**：艺术字横幅 + rich 美化的 CLI + 简约风 Web UI（同一内核，行为一致）
+- 🛡 **安全默认**：自动修复需逐次确认并自动备份、路径穿越防护、Key 脱敏且不入库、Web 仅监听本机
 
 ## 快速开始
 
@@ -25,10 +26,12 @@ copy config.example.yaml config.yaml   # 编辑 config.yaml 填入 api_key
 
 # 3. 运行
 python main.py config test             # 测试连通性
-python main.py review path/to/code.py  # 审查文件
-python main.py chat                    # 交互式多轮对话
+python main.py review path/to/code.py  # 审查文件（支持任意磁盘绝对路径）
+python main.py chat -r D:\code\myproj  # 交互式对话（-r 指定任意审查根）
 python main.py web                     # 启动 Web 界面（http://127.0.0.1:8000）
 ```
+
+> `chat` 会话内可用 `/cd <目录>` 随时切换审查边界；Web 端点「📁 选择目录」可下钻选择任意本地目录。
 
 **Windows 用户也可以双击启动**（仓库根目录三个入口，自动选用项目虚拟环境）：
 

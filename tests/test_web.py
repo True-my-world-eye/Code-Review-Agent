@@ -153,7 +153,125 @@ def test_config_test_endpoint(
     assert data["ok"] is True and "fake" in data["message"]
 
 
+# ================================================================ 目录浏览
+def test_fs_list_drives_root() -> None:
+    """path 为空 → 返回导航起点：盘符列表（Windows）与空路径。"""
+    data = client.get("/api/fs/list").json()
+    assert data["path"] == "" and data["parent"] is None
+    assert isinstance(data["drives"], list) and len(data["drives"]) >= 1
+    assert data["dirs"] == []
+
+
+def test_fs_list_subdirs(web_root: Path) -> None:
+    """指定目录 → 返回子目录（排序）、父目录与盘符。"""
+    (web_root / "sub_b").mkdir()
+    (web_root / "sub_a").mkdir()
+    (web_root / "a_file.py").write_text("x = 1", encoding="utf-8")
+    data = client.get("/api/fs/list", params={"path": str(web_root)}).json()
+    assert data["path"] == str(web_root)
+    assert data["dirs"] == ["sub_a", "sub_b"]  # 目录排序，文件不出现
+    assert data["parent"] is not None
+    assert data["drives"]
+
+
+def test_fs_list_missing_path() -> None:
+    resp = client.get("/api/fs/list", params={"path": "no-such-dir-xyz"})
+    assert resp.status_code == 400
+    assert "不存在" in resp.json()["detail"]
+
+
+def test_fs_list_on_file() -> None:
+    resp = client.get(
+        "/api/fs/list", params={"path": str(Path(__file__))}
+    )
+    assert resp.status_code == 400
+    assert "不是目录" in resp.json()["detail"]
+
+
 # ================================================================ 审查任务
+def test_review_external_root(
+    web_config: Path,
+    web_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """审查根可以是项目之外的任意目录（由 root 参数指定）。"""
+    write_config(web_config)
+    external = tmp_path / "external_proj"
+    external.mkdir()
+    (external / "main.py").write_text("ext = 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        server_mod,
+        "create_agent",
+        make_fake_agent([LLMReply(content=REPORT_JSON, finish_reason="stop")]),
+    )
+    resp = client.post(
+        "/api/review", json={"path": ".", "root": str(external)}
+    )
+    assert resp.status_code == 200
+    data = wait_task(resp.json()["task_id"])
+    assert data["status"] == "done"
+    assert data["root_rel"] == "."
+
+
+def test_review_external_root_escape(
+    web_config: Path, web_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """相对所选根目录的 ../ 越界仍被拒绝。"""
+    write_config(web_config)
+    external = tmp_path / "ext2"
+    external.mkdir()
+    resp = client.post(
+        "/api/review", json={"path": "../etc", "root": str(external)}
+    )
+    assert resp.status_code == 400
+    assert "越界" in resp.json()["detail"]
+
+
+def test_review_invalid_root(web_config: Path) -> None:
+    write_config(web_config)
+    resp = client.post(
+        "/api/review", json={"path": ".", "root": "no-such-root-xyz"}
+    )
+    assert resp.status_code == 400
+    assert "根目录不存在" in resp.json()["detail"]
+
+
+def test_fix_via_task_root(
+    web_config: Path,
+    web_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """修复接口按 task_id 定位项目外的审查根（路径相对该根解析）。"""
+    write_config(web_config)
+    external = tmp_path / "ext_fix"
+    external.mkdir()
+    (external / "app.py").write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        server_mod,
+        "create_agent",
+        make_fake_agent([LLMReply(content=REPORT_JSON, finish_reason="stop")]),
+    )
+    task_id = client.post(
+        "/api/review", json={"path": ".", "root": str(external)}
+    ).json()["task_id"]
+    wait_task(task_id)
+
+    resp = client.post(
+        "/api/fix",
+        json={
+            "path": "app.py",          # 相对该任务的审查根
+            "old_code": "x = 1",
+            "new_code": "x = 2",
+            "task_id": task_id,
+        },
+    )
+    assert resp.status_code == 200 and resp.json()["ok"] is True
+    assert (external / "app.py").read_text(encoding="utf-8") == "x = 2\n"
+    assert (external / "app.py.bak").exists()
+
+
 def test_review_unconfigured(web_config: Path) -> None:
     """无 Key → 400 + 中文提示。"""
     resp = client.post("/api/review", json={"path": "."})

@@ -293,6 +293,25 @@ def test_apply_fix_disabled(root: Path) -> None:
     assert result.startswith("Error:") and "禁用" in result
 
 
+def test_apply_fix_crlf_file(root: Path) -> None:
+    """CRLF 文件 + 模型给出的 LF 风格代码：换行对齐后修复成功且不翻倍换行。"""
+    target = root / "win.py"
+    target.write_bytes(b"a = 1\r\nb = 2\r\n")  # Windows 风格换行
+    registry = build_default_registry(
+        ToolContext(root=root, confirm_fn=lambda p, d: True)
+    )
+    result = registry.execute("apply_fix", {
+        "path": "win.py",
+        "old_code": "a = 1\nb = 2",   # 模型 JSON 里通常是 LF
+        "new_code": "a = 10\nb = 20",
+    })
+    assert "已修复" in result
+    fixed = (root / "win.py").read_bytes()
+    assert fixed == b"a = 10\r\nb = 20\r\n"  # 仍是单个 \r\n，没有 \r\r\n
+    backup = (root / "win.py.bak").read_bytes()
+    assert backup == b"a = 1\r\nb = 2\r\n"  # 备份保持修复前状态
+
+
 # ================================================================ 注册表
 def test_unknown_tool(registry: ToolRegistry) -> None:
     result = registry.execute("launch_missiles", {})

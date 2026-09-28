@@ -111,6 +111,8 @@ def test_get_config_masked(web_config: Path) -> None:
     data = client.get("/api/config").json()
     assert data["settings"]["api_key"] != "sk-test-key"  # 脱敏
     assert "***" in data["settings"]["api_key"]
+    # 顶栏药丸依赖的配置状态：有 Key + 预设齐全 → True
+    assert data["settings"]["is_configured"] is True
     assert len(data["providers"]) == 3
     assert {p["id"] for p in data["providers"]} == {"deepseek", "mimo", "openai-compatible"}
 

@@ -171,6 +171,19 @@ def test_public_dict_masks_key(tmp_path: Path) -> None:
     assert public["effective_model"] == PRESETS["deepseek"]["model"]
 
 
+def test_public_dict_includes_is_configured(tmp_path: Path) -> None:
+    """to_public_dict 必须携带 is_configured（Web 顶栏状态药丸依赖它）。"""
+    # 已配置：Key + 预设端点/模型齐全
+    path = write_config(tmp_path, {"provider": "deepseek", "api_key": "sk-test"})
+    s = load_settings(config_path=path, env=EMPTY_ENV)
+    assert s.to_public_dict()["is_configured"] is True
+    # 未配置：没有 Key
+    s2 = load_settings(
+        overrides={"api_key": ""}, config_path=tmp_path / "absent.yaml", env=EMPTY_ENV
+    )
+    assert s2.to_public_dict()["is_configured"] is False
+
+
 def test_save_load_roundtrip(tmp_path: Path) -> None:
     """save_settings 写出的文件应能被 load_settings 原样读回。"""
     original = Settings(

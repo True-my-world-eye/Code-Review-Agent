@@ -61,9 +61,12 @@ const dirState = { current: "", parent: null };
 /** 顶栏状态药丸 */
 function renderConnPill(settings) {
   const pill = $("connPill");
-  const configured = settings.is_configured;
+  // is_configured 由服务端给出；缺失时按展示字段兜底推断
+  const configured =
+    settings.is_configured ??
+    !!(settings.api_key && settings.effective_base_url && settings.effective_model);
   pill.textContent = configured
-    ? `${settings.provider} · ${settings.effective_model} ● 已配置`
+    ? `${settings.provider} · ${settings.effective_model || ""} ● 已配置`
     : `${settings.provider} · 未配置 Key`;
   pill.className = "pill " + (configured ? "pill-ok" : "pill-warn");
 }
@@ -91,6 +94,10 @@ function fillSettingsForm(s) {
   $("cfgApiKey").value = "";          // 明文 Key 永不回显
   $("cfgApiKey").placeholder = s.api_key ? `当前：${s.api_key}` : "sk-...";
   $("cfgModel").value = s.model || "";
+  // 占位符跟随当前服务商的生效预设，避免看到别的服务商的模型名
+  $("cfgModel").placeholder = s.effective_model
+    ? `留空用预设：${s.effective_model}`
+    : "模型名";
   $("cfgTemperature").value = s.temperature;
   $("cfgMaxIter").value = s.max_iterations;
   $("cfgAutoFix").checked = !!s.auto_fix_enabled;
@@ -513,10 +520,11 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btnSaveSettings").addEventListener("click", saveSettings);
   $("btnTestConn").addEventListener("click", testConnection);
   $("btnCancelSettings").addEventListener("click", () => $("settingsDialog").close());
-  // 服务商切换时自动带出端点/模型预设提示（填空则用预设）
+  // 服务商切换时清空可覆盖项，占位符退回通用提示（重新打开设置会带回新预设）
   $("cfgProvider").addEventListener("change", () => {
     $("cfgBaseUrl").value = "";
     $("cfgModel").value = "";
+    $("cfgModel").placeholder = "留空用预设";
   });
 
   loadConfig();

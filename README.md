@@ -83,7 +83,7 @@ python main.py web
 | `provider` | `deepseek` / `mimo` / `openai-compatible` | `deepseek` |
 | `base_url` | 端点，留空用预设 | 按预设 |
 | `api_key` | 密钥，推荐用 `CRA_API_KEY` 环境变量 | 空 |
-| `model` | 模型名，留空用预设（MiMo 预设 `mimo-v2.6-pro`） | 按预设 |
+| `model` | 模型名，留空用预设（MiMo 预设 `mimo-v2.6-flash`） | 按预设 |
 | `max_iterations` | Agent 循环上限 | 8 |
 | `auto_fix_enabled` | 是否允许自动修复（仍需逐次确认） | true |
 

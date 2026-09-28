@@ -296,7 +296,10 @@ def chat(
     )
     try:
         while True:
-            text = Prompt.ask("\n[bold]你[/bold]").strip()
+            # 提示符常驻显示当前审查根目录名（切换 /cd 后即时变化）
+            text = Prompt.ask(
+                f"\n[bold cyan]{root_dir.name}[/bold cyan] › 你"
+            ).strip()
             if not text:
                 continue
             if text in {"/exit", "/quit"}:

@@ -3,6 +3,8 @@
 基于 LLM 的代码审查 Agent：输入一个文件或目录，Agent 自主完成「读取代码 → 调用工具分析 → 生成审查报告 →（可选）应用修复」的完整闭环，提供 **CLI** 与 **Web** 双界面，支持 DeepSeek / 小米 MiMo 等任意 OpenAI 兼容服务商一键切换。
 
 > 设计文档见 [Design.md](Design.md) · 开发进度见 [docs/开发文档.md](docs/开发文档.md) · 测试记录见 [docs/测试文档.md](docs/测试文档.md)
+>
+> 📦 仓库地址：https://github.com/True-my-world-eye/Code-Review-Agent
 
 ## 功能特性
 

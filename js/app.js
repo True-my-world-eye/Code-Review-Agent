@@ -44,11 +44,15 @@ function escapeHtml(text) {
 /* ---------------- 全局状态 ---------------- */
 const state = {
   mode: "path",        // path | code
+  root: null,          // 审查根（null = 项目根目录；否则为选定的绝对路径）
   taskId: null,        // 当前轮询的任务
   pollTimer: null,     // 轮询定时器
   history: [],         // 本次运行内的审查历史
   providers: [],       // 服务商列表
 };
+
+/* ---------------- 目录选择器状态 ---------------- */
+const dirState = { current: "", parent: null };
 
 /* ============================================================
  * 配置：读取 / 保存 / 连通性自检
@@ -57,9 +61,12 @@ const state = {
 /** 顶栏状态药丸 */
 function renderConnPill(settings) {
   const pill = $("connPill");
-  const configured = settings.is_configured;
+  // is_configured 由服务端给出；缺失时按展示字段兜底推断
+  const configured =
+    settings.is_configured ??
+    !!(settings.api_key && settings.effective_base_url && settings.effective_model);
   pill.textContent = configured
-    ? `${settings.provider} · ${settings.effective_model} ● 已配置`
+    ? `${settings.provider} · ${settings.effective_model || ""} ● 已配置`
     : `${settings.provider} · 未配置 Key`;
   pill.className = "pill " + (configured ? "pill-ok" : "pill-warn");
 }
@@ -87,6 +94,10 @@ function fillSettingsForm(s) {
   $("cfgApiKey").value = "";          // 明文 Key 永不回显
   $("cfgApiKey").placeholder = s.api_key ? `当前：${s.api_key}` : "sk-...";
   $("cfgModel").value = s.model || "";
+  // 占位符跟随当前服务商的生效预设，避免看到别的服务商的模型名
+  $("cfgModel").placeholder = s.effective_model
+    ? `留空用预设：${s.effective_model}`
+    : "模型名";
   $("cfgTemperature").value = s.temperature;
   $("cfgMaxIter").value = s.max_iterations;
   $("cfgAutoFix").checked = !!s.auto_fix_enabled;
@@ -162,6 +173,7 @@ async function startReview() {
   const body = { ask: $("inputAsk").value.trim() || null };
   if (state.mode === "path") {
     body.path = $("inputPath").value.trim() || ".";
+    if (state.root) body.root = state.root;   // 选定的任意本地目录
   } else {
     body.code = $("inputCode").value;
     body.file_name = $("inputFileName").value.trim() || "snippet.py";
@@ -326,6 +338,7 @@ async function applyFix(idx) {
         path: relPath,
         old_code: issue.fix.old_code,
         new_code: issue.fix.new_code,
+        task_id: state.taskId,   // 服务端据此定位项目外的审查根
       }),
     });
     if (data.ok) {
@@ -344,6 +357,62 @@ async function applyFix(idx) {
   } catch (err) {
     toast(err.message, true);
   }
+}
+
+/* ============================================================
+ * 目录选择器（支持任意本地目录，不限于项目内）
+ * ============================================================ */
+
+/** 设定/清除审查根：null 表示回到项目根目录 */
+function setPickedRoot(path) {
+  state.root = path || null;
+  $("rootDisplay").value = path || "（项目根目录）";
+}
+
+/** 导航到指定目录并渲染盘符与子目录列表 */
+async function navigateDir(path) {
+  try {
+    const data = await api(`/api/fs/list?path=${encodeURIComponent(path || "")}`);
+    dirState.current = data.path;
+    dirState.parent = data.parent;
+    $("dirCrumb").value = data.path || "（选择一个盘符开始）";
+    $("btnDirUp").disabled = !data.parent;
+
+    // 盘符快捷跳转
+    $("dirDrives").innerHTML = (data.drives || [])
+      .map(
+        (d) =>
+          `<button type="button" class="tab dir-drive" data-drive="${escapeHtml(d)}">${escapeHtml(d)}</button>`
+      )
+      .join("");
+    $("dirDrives").querySelectorAll("[data-drive]").forEach((btn) => {
+      btn.addEventListener("click", () => navigateDir(btn.dataset.drive));
+    });
+
+    // 子目录：单击下钻
+    const list = $("dirList");
+    if (!data.dirs.length) {
+      list.innerHTML = `<li class="history-empty">（无子目录）</li>`;
+    } else {
+      list.innerHTML = data.dirs
+        .map((d) => `<li data-name="${escapeHtml(d)}">📁 ${escapeHtml(d)}</li>`)
+        .join("");
+      list.querySelectorAll("li[data-name]").forEach((li) => {
+        li.addEventListener("click", () => {
+          const base = dirState.current.replace(/[\\/]+$/, "");
+          const sep = base.includes("\\") ? "\\" : "/";
+          navigateDir(`${base}${sep}${li.dataset.name}`);
+        });
+      });
+    }
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function openDirPicker() {
+  $("dirDialog").showModal();
+  navigateDir(dirState.current || "");
 }
 
 /* ============================================================
@@ -414,6 +483,10 @@ function resetAll() {
   $("timelineCard").classList.add("hidden");
   $("timeline").innerHTML = "";
   $("inputAsk").value = "";
+  $("inputPath").value = ".";
+  setPickedRoot(null);          // 审查根回到项目目录
+  dirState.current = "";
+  dirState.parent = null;
   renderHistory();
 }
 
@@ -425,6 +498,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // 审查
   $("btnReview").addEventListener("click", startReview);
   $("btnNew").addEventListener("click", resetAll);
+  // 目录选择器
+  $("btnPickDir").addEventListener("click", openDirPicker);
+  $("btnDirUp").addEventListener("click", () => navigateDir(dirState.parent || ""));
+  $("btnDirCancel").addEventListener("click", () => $("dirDialog").close());
+  $("btnDirPick").addEventListener("click", () => {
+    if (!dirState.current) {
+      toast("请先进入一个目录", true);
+      return;
+    }
+    setPickedRoot(dirState.current);
+    $("dirDialog").close();
+    toast(`审查根已设为 ${dirState.current}`);
+  });
   // 设置
   $("btnSettings").addEventListener("click", () => {
     settingsMsg("");
@@ -434,10 +520,11 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btnSaveSettings").addEventListener("click", saveSettings);
   $("btnTestConn").addEventListener("click", testConnection);
   $("btnCancelSettings").addEventListener("click", () => $("settingsDialog").close());
-  // 服务商切换时自动带出端点/模型预设提示（填空则用预设）
+  // 服务商切换时清空可覆盖项，占位符退回通用提示（重新打开设置会带回新预设）
   $("cfgProvider").addEventListener("change", () => {
     $("cfgBaseUrl").value = "";
     $("cfgModel").value = "";
+    $("cfgModel").placeholder = "留空用预设";
   });
 
   loadConfig();

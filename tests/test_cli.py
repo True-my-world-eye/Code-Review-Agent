@@ -181,3 +181,37 @@ def test_chat_missing_session(isolated_config: Path) -> None:
     result = runner.invoke(cli_mod.app, ["chat", "-s", "no-such-session"])
     assert result.exit_code == 1
     assert "会话不存在" in result.stdout
+    # 进入命令后应先展示艺术字横幅（空白归一化后匹配 figlet 特征行）
+    from app.cli.banner import BANNER
+
+    normalized = " ".join(result.stdout.split())
+    banner_line = " ".join(BANNER.splitlines()[4].split())
+    assert banner_line in normalized
+
+
+def test_chat_invalid_root(isolated_config: Path) -> None:
+    """--root 指向不存在的目录 → 友好报错 + 退出码 1。"""
+    write_config(isolated_config)
+    result = runner.invoke(cli_mod.app, ["chat", "-r", "no-such-root-xyz"])
+    assert result.exit_code == 1
+    assert "审查根目录不存在" in result.stdout
+
+
+def test_review_help_documents_external_paths() -> None:
+    """review 帮助须指引绝对路径与拖拽用法（可审查任意磁盘目录）。"""
+    result = runner.invoke(cli_mod.app, ["review", "--help"])
+    assert result.exit_code == 0
+    assert "绝对路径" in result.stdout
+    assert "拖到" in result.stdout
+
+
+def test_chat_prompt_shows_current_root(isolated_config: Path) -> None:
+    """每一轮输入提示符都要带当前审查根目录名（常驻可见）。"""
+    write_config(isolated_config)
+    from pathlib import Path as _Path
+
+    root_name = _Path.cwd().name  # pytest 从项目根目录启动
+    result = runner.invoke(cli_mod.app, ["chat"], input="/exit\n")
+    assert result.exit_code == 0
+    normalized = " ".join(result.stdout.split())
+    assert f"{root_name} ›" in normalized

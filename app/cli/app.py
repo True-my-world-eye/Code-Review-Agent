@@ -18,11 +18,13 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from app import __version__
+from app.cli.banner import BANNER, SUBTITLE
 from app.config import ConfigError, load_settings, save_settings
 from app.core.agent import Agent, AgentEvent, AgentResult
 from app.core.memory import SessionMemory, list_sessions
@@ -50,6 +52,18 @@ _SEVERITY_META: dict[str, tuple[str, str, int]] = {
 }
 
 
+# ================================================================ 启动横幅
+def print_banner(extra: str = "") -> None:
+    """打印启动横幅：大字艺术字 + 版本副标题（extra 用于展示审查根等信息）。"""
+    console.print()
+    console.print(BANNER.rstrip(), style="bold cyan")
+    line = f"  {SUBTITLE} · v{__version__}"
+    if extra:
+        line += f" · {extra}"
+    console.print(line, style="dim")
+    console.print()
+
+
 # ================================================================ 通用渲染
 def _print_event(event: AgentEvent) -> None:
     """把一条 Agent 时间线事件渲染为彩色单行。"""
@@ -74,8 +88,10 @@ def _render_report(content: str, *, title: str = "审查报告") -> None:
     """渲染最终文本：可解析为 JSON → 摘要 + 问题表格；否则降级展示原文。"""
     report = parse_review_report(content)
     if not report["parsed"]:
-        # 降级：模型没按格式输出，原样展示（绝不吞掉内容）
-        console.print(Panel(content, title="Agent 输出", border_style="yellow"))
+        # 降级：模型没按格式输出 → 按 Markdown 渲染原文（绝不吞内容）
+        console.print(
+            Panel(Markdown(content), title="Agent 输出", border_style="yellow")
+        )
         return
 
     issues = report["issues"]
@@ -182,7 +198,14 @@ def version() -> None:
 # ================================================================ review
 @app.command("review")
 def review(
-    path: str = typer.Argument(".", help="要审查的文件或目录（默认当前目录）"),
+    path: str = typer.Argument(
+        ".",
+        help=(
+            "要审查的文件或目录。支持相对路径、绝对路径与任意磁盘目录，"
+            "例如：review src · review D:\\code\\myproj · review D:\\code\\app.py"
+            "（也可把文件直接拖到 审查.bat 图标上）"
+        ),
+    ),
     ask: str | None = typer.Option(None, "--ask", "-a", help="附加审查要求"),
 ) -> None:
     """一次性审查：实时展示 Agent 时间线，最后输出结构化报告。"""
@@ -200,6 +223,8 @@ def review(
     else:
         root, rel = target.parent, target.name
 
+    print_banner(extra=f"审查 {rel}")
+
     console.print(
         Panel(
             f"[bold]Code Review Agent[/bold]\n"
@@ -208,7 +233,6 @@ def review(
             border_style="blue",
         )
     )
-
     agent = _build_agent(settings, root)
     user_input = f"请审查：{rel}"
     if ask:
@@ -228,9 +252,26 @@ def chat(
     session: str | None = typer.Option(
         None, "--session", "-s", help="恢复指定的历史会话 ID"
     ),
+    root: str | None = typer.Option(
+        None,
+        "--root",
+        "-r",
+        help="审查边界目录（代码不必在本项目下），例如 -r D:\\code\\myproj；默认当前目录",
+    ),
 ) -> None:
-    """交互式多轮对话：支持追问、历史会话与逐条修复确认。"""
+    """交互式多轮对话：支持追问、切换审查目录、历史会话与逐条修复确认。"""
     settings = _require_configured()
+
+    # 审查边界：--root 指定的任意目录，或当前工作目录
+    if root:
+        root_path = Path(root).expanduser()
+        if not root_path.is_dir():
+            console.print(f"[red]✗ 审查根目录不存在或不是目录：{root}[/red]")
+            raise typer.Exit(code=1)
+        root_dir = root_path.resolve()
+    else:
+        root_dir = Path.cwd().resolve()
+    print_banner(extra=f"审查边界 {root_dir}")
 
     memory = None
     if session:
@@ -241,28 +282,48 @@ def chat(
             raise typer.Exit(code=1) from None
         console.print(f"[green]已恢复会话 {session}（{len(memory.messages)} 条消息）[/green]")
 
-    # 审查边界 = 当前工作目录
-    root = Path.cwd().resolve()
-    agent = _build_agent(settings, root, memory=memory)
+    agent = _build_agent(settings, root_dir, memory=memory)
 
     console.print(
         Panel(
-            "交互式审查（审查边界 = 当前目录）\n"
-            "命令：/exit 退出 · /reset 重置会话 · /sessions 查看历史会话",
+            f"审查边界：[bold]{root_dir}[/bold]\n"
+            "命令：/exit 退出 · /reset 重置会话 · /cd <目录> 切换审查目录 · "
+            "/sessions 查看历史会话\n"
+            "提示：代码可以在任意位置，用 /cd 或启动时 -r 指定即可",
             title="chat",
             border_style="blue",
         )
     )
     try:
         while True:
-            text = Prompt.ask("\n[bold]你[/bold]").strip()
+            # 提示符常驻显示当前审查根目录名（切换 /cd 后即时变化）
+            text = Prompt.ask(
+                f"\n[bold cyan]{root_dir.name}[/bold cyan] › 你"
+            ).strip()
             if not text:
                 continue
             if text in {"/exit", "/quit"}:
                 break
             if text == "/reset":
-                agent = _build_agent(settings, root)  # 新 memory = 空会话
+                agent = _build_agent(settings, root_dir)  # 新 memory = 空会话
                 console.print("[green]已重置为新会话[/green]")
+                continue
+            if text.startswith("/cd"):
+                # 切换审查边界：系统提示词随根目录变化，因此会话一并重置
+                parts = text.split(maxsplit=1)
+                if len(parts) < 2:
+                    console.print("[yellow]用法：/cd <目录路径>，如 /cd D:\\code\\myproj[/yellow]")
+                    continue
+                # 去掉可能带入的引号（拖拽/复制路径常见）
+                candidate = Path(parts[1].strip().strip('"')).expanduser()
+                if not candidate.is_dir():
+                    console.print(f"[red]✗ 目录不存在或不是目录：{candidate}[/red]")
+                    continue
+                root_dir = candidate.resolve()
+                agent = _build_agent(settings, root_dir)
+                console.print(
+                    f"[green]✓ 审查边界已切换：{root_dir}[/green]（会话已重置）"
+                )
                 continue
             if text == "/sessions":
                 sessions = list_sessions()
@@ -298,6 +359,7 @@ def web(
     """启动 Web 界面（浏览器访问 http://127.0.0.1:8000）。"""
     import uvicorn
 
+    print_banner(extra="Web 服务")
     console.print(
         Panel(
             f"[bold]Code Review Agent · Web[/bold]\n"

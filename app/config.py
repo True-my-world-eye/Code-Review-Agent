@@ -38,7 +38,7 @@ PRESETS: dict[str, dict[str, str]] = {
         "label": "小米 MiMo",
         # 端点与模型名已按官方文档校准（2026-09-28 查询 /v1/models 验证）
         "base_url": "https://api.xiaomimimo.com/v1",
-        "model": "mimo-v2.6-pro",
+        "model": "mimo-v2.6-flash",
     },
     "openai-compatible": {
         "label": "自定义（OpenAI 兼容）",
@@ -102,11 +102,13 @@ class Settings:
 
     # ---------------- 对外展示 ----------------
     def to_public_dict(self) -> dict[str, Any]:
-        """转为可安全展示的字典：api_key 脱敏，附带生效值。"""
+        """转为可安全展示的字典：api_key 脱敏，附带生效值与配置状态。"""
         data = asdict(self)
         data["api_key"] = mask_key(self.api_key)
         data["effective_base_url"] = self.effective_base_url
         data["effective_model"] = self.effective_model
+        # 前端顶栏状态药丸依赖此字段（缺失会被误判为「未配置」）
+        data["is_configured"] = self.is_configured
         return data
 
     def to_yaml_dict(self) -> dict[str, Any]:

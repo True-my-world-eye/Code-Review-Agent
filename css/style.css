@@ -277,6 +277,37 @@ html, body {
 .dialog-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .spacer { flex: 1; }
 
+/* ---------------- 目录选择器 ---------------- */
+.dir-hint { font-size: 12.5px; color: var(--sub); margin-bottom: 2px; }
+.dir-drives { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+.dir-drive {
+  padding: 4px 12px;
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+}
+.dir-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #FBFBFC;
+}
+.dir-list li {
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dir-list li:hover { background: #EEF3FF; color: var(--accent); }
+.dir-list li.history-empty { cursor: default; color: var(--sub); }
+.dir-list li.history-empty:hover { background: transparent; color: var(--sub); }
+
 /* ---------------- Toast ---------------- */
 .toast {
   position: fixed;

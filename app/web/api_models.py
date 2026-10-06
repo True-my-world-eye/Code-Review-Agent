@@ -22,7 +22,11 @@ class ConfigUpdate(BaseModel):
 class ReviewRequest(BaseModel):
     """POST /api/review 的请求体：路径模式与粘贴模式二选一。"""
 
-    path: str = Field(default=".", description="相对项目的审查路径（path 模式）")
+    path: str = Field(default=".", description="相对审查根的路径（path 模式）")
+    root: str | None = Field(
+        default=None,
+        description="审查根目录（绝对路径，由「选择目录」指定；缺省为项目根目录）",
+    )
     ask: str | None = Field(default=None, description="补充审查要求")
     code: str | None = Field(default=None, description="粘贴的代码（code 模式）")
     file_name: str | None = Field(
@@ -36,3 +40,7 @@ class FixRequest(BaseModel):
     path: str
     old_code: str
     new_code: str
+    task_id: str | None = Field(
+        default=None,
+        description="产生该报告的审查任务 ID（用于定位项目外的审查根）",
+    )

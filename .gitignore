@@ -21,6 +21,8 @@ build/
 Homework 1.pptx
 ~$*
 *.rar
+*.zip
+*.7z
 
 # ===== 课程内部材料（仅本地保留，不入库） =====
 docs/演示视频脚本.md
